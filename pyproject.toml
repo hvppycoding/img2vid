@@ -20,6 +20,7 @@ classifiers = [
 
 [project.scripts]
 img2vid = "img2vid.cli:main"
+img2vid-bounce = "img2vid.utils.bounce:main"
 
 [tool.setuptools]
 include-package-data = true

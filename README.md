@@ -149,6 +149,110 @@ On Windows, the tool writes the concat list in **UTF-8 with BOM** and uses POSIX
 
 ---
 
+# Bounce utility (`img2vid-bounce`)
+
+Adds a “bounce” (forward then backward) segment to your image sequence **without duplicating the last frame** and **without symlinks** (Windows-friendly).  
+Works as a preprocessing step: it creates extra images so your existing alphabetical `img2vid` pipeline picks them up automatically.
+
+---
+
+## What it does (step-by-step)
+
+1. Scans the **current folder** for images (default extensions: .png, .jpg, .jpeg, .bmp, .webp, .tif, .tiff).  
+2. Sorts them in **alphabetical order** (case-insensitive).  
+3. Determines the target segment:  
+   - If no arguments are given → uses the **entire range** `[1..N]`.  
+   - Or you can specify `--start/--end` (1-based index) or `--from-name/--to-name`.  
+4. Generates a reversed copy of the segment **excluding the last frame** (so the pivot isn’t duplicated).  
+5. Writes copies as `ENDNAME_001.ext`, `ENDNAME_002.ext`, … next to your images.  
+   - It finds the first **contiguous free number block**, so re-running won’t overwrite existing files.
+
+Resulting order (conceptually):  
+`… start, …, end, end-1, …, start …` (with `end` not repeated at the join).
+
+---
+
+## Why this is safe for Windows
+
+- Uses `shutil.copy2` only (no symlinks/junctions).  
+- Preserves timestamps and metadata where possible.
+
+---
+
+## Typical workflow
+
+1) Run the bounce preprocessor to create the mirrored frames.  
+2) Run your existing `img2vid` command to stitch alphabetically.  
+3) (Optional) Delete the generated `*_###.ext` files if you need to revert.
+
+---
+
+## Usage
+
+- No arguments (apply to the whole sequence):
+  - `img2vid-bounce`
+
+- By index (1-based, inclusive):
+  - `img2vid-bounce --start 3 --end 8`
+
+- By filename:
+  - `img2vid-bounce --from-name 0003.png --to-name 0008.png`
+
+- Limit to certain extensions:
+  - `img2vid-bounce --exts .png .jpg`
+
+- Dry run (show what would be created, but don’t write files):
+  - `img2vid-bounce --dry-run --start 10 --end 30`
+
+---
+
+## Options
+
+- `--start INT` – Start index (1-based).  
+- `--end INT` – End index (1-based, inclusive).  
+- `--from-name NAME` – Start filename (must exist in the alphabetical list).  
+- `--to-name NAME` – End filename (must exist in the alphabetical list).  
+- `--exts EXT ...` – One or more extensions to include (e.g., `.png .jpg`). If omitted, a common image set is used.  
+- `--dry-run` – Print planned copies but **do not** create files.
+
+If none of `--start/--end` or `--from-name/--to-name` are provided, the tool uses the full range `[1..N]`.
+
+---
+
+## File naming details
+
+- If your end file is `0008.png`, generated files will be `0008_001.png`, `0008_002.png`, …  
+- The tool searches for the **first gap** large enough to hold all new files (e.g., if `_001` exists, it will start at `_00X` where a big enough contiguous span is free).
+
+---
+
+## Notes & tips
+
+- **Alphabetical vs numeric**: alphabetical order means `1, 10, 2, …`. For numeric ordering, prefer **zero-padded names** (`0001, 0002, …`).  
+- **Idempotency**: running it again on the same segment will create a new block (`_00X`) rather than overwriting.  
+- **Multiple segments**: run `img2vid-bounce` separately per segment (choose each segment’s `--end` so its clones group under that end name).  
+- **Space/time**: copying creates real files; if storage is tight, consider cleaning up `*_###.ext` after rendering.
+
+---
+
+## Example end-to-end
+
+1) Add bounce to frames `0003.png` through `0008.png`:  
+   `img2vid-bounce --from-name 0003.png --to-name 0008.png`
+
+2) Render as usual (alphabetical stitching):  
+   `img2vid`
+
+The final video will traverse forward through `0003 … 0008`, then step backward `0007 … 0003`—with `0008` not duplicated at the turning point.
+
+---
+
+## Troubleshooting
+
+- “Cannot find file …”: ensure the filename exists **after** alphabetical sorting (case-insensitive).  
+- “No images found”: check extensions or specify `--exts`.  
+- Unexpected order in final video: verify your filenames are **zero-padded** if you intend numeric ordering.
+
 ## License
 
 MIT
